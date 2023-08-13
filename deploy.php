@@ -1,41 +1,72 @@
 <?php
+
 namespace Deployer;
 
 require 'recipe/laravel.php';
 
 // Config
+set('application', 'my-laravel-app');
+// Define some shared files and directories
+set('shared_files', ['.env']);
+set('shared_dirs', ['storage']);
+// Define some writable directories
+set('writable_dirs', ['bootstrap/cache', 'storage']);
+set('allow_anonymous_stats', false);
+set('releases_path', '/var/www/html/deployer/releases');
+set('current_path', '/var/www/html/deployer/current');
 
-set('repository', 'https://github.com/mshifo/lara-deployer.git');
-
-add('shared_files', []);
-add('shared_dirs', []);
-add('writable_dirs', []);
-
-// Hosts
-
+// Server details
 host('melshafaey.com')
     ->set('remote_user', 'ubuntu')
     ->setIdentityFile('/home/mahmoud/Downloads/MyDevServerKey.pem')
     ->set('deploy_path', '/var/www/html/deployer');
 
-//Tasks
-task('deploy:prepare');
-task('deploy:lock');
-task('deploy:release');
-task('deploy:update_code');
-task('deploy:shared');
-task('deploy:vendors');
-task('deploy:writable');
+// Build task
+task('build', function () {
+    runLocally('./build.sh');
+});
 
-task('artisan:storage:link');
-task('artisan:view:clear');
-task('artisan:cache:clear');
-task('artisan:config:cache');
-task('artisan:optimize');
-task('deploy:symlink');
-task('deploy:unlock');
-task('deploy:cleanup');
+task('deploy:upload', function () {
+    // copy over code into release folder
+    upload(__DIR__ . '/build/project.zip', '{{releases_path}}/{{release_name}}');
+    run('cd {{releases_path}}/{{release_name}} && unzip -o project.zip');
 
+    // Set permissions on release folder
+    //run('chmod -R g+w {{releases_path}}/{{release_name}}');
 
-//Hooks
+});
+
+task('deploy:update_code', function () {
+
+    // Get latest release name
+    $currentRelease = run('ls -t {{releases_path}} | head -n 1');
+
+    // Create current symlink
+    run("ln -sfn {{releases_path}}/$currentRelease {{current_path}}");
+
+    // Pull latest code from Git
+    cd('{{current_path}}');
+
+    // Install dependencies
+    run('composer install --no-interaction --prefer-dist --optimize-autoloader');
+    // Set maintenance mode
+    run('{{bin/php}} {{current_path}}/artisan down');
+
+    // Clear caches
+    run('{{bin/php}} {{current_path}}/artisan cache:clear');
+
+    // Reboot queue worker
+    run('{{bin/php}} {{current_path}}/artisan queue:restart');
+
+    // Disable maintenance mode
+    run('{{bin/php}} {{current_path}}/artisan up');
+});
+
+task('deploy:symlink', function () {
+    run("cd {{deploy_path}} && rm -rf release"); // Remove release link.
+});
+
+// Hooks
+before('deploy:setup', 'build');
+before('deploy:update_code', 'deploy:upload');
 after('deploy:failed', 'deploy:unlock');

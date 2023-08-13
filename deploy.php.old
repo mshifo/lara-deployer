@@ -1,0 +1,58 @@
+<?php
+
+namespace Deployer;
+
+require 'recipe/laravel.php';
+
+// Project name
+set('application', 'my-laravel-app');
+set('release_path', '/var/www/html/deployer/current/');
+//set('current_path', '/var/www/html/deployer/current/');
+
+// Server details
+host('melshafaey.com')
+    ->set('remote_user', 'ubuntu')
+    ->setIdentityFile('/home/mahmoud/Downloads/MyDevServerKey.pem')
+    ->set('deploy_path', '/var/www/html/deployer');
+
+// Build task
+task('build', function () {
+    runLocally('./build.sh');
+});
+
+// Deploy release
+task('deploy:release', function () {
+    upload(__DIR__ . '/build/project.zip', '{{release_path}}');
+});
+
+task('deploy:update_code', function () {
+    run('cd {{release_path}} && unzip -o project.zip');
+});
+
+// Disable git clone
+task('deploy:checkout', function () {
+});
+
+// Migrate database
+/*task('database:migrate', function () {
+    run('{{bin/php}} {{current_path}}artisan migrate --force');
+  });*/
+
+//after('deploy:vendors', 'database:migrate');
+
+// Deploy steps
+desc('Deploy Laravel app');
+task('deploy', [
+    'deploy:prepare',
+    'deploy:symlink',
+    'deploy:vendors',
+    'artisan:migrate',
+    'deploy:cleanup',
+    'deploy:clear_paths',
+  ]);
+
+after('deploy', 'deploy:success');
+after('deploy:failed', 'deploy:unlock');
+
+// Set SSH multiplexing to speed up deployments
+set('ssh_multiplexing', true);
