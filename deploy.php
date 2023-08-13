@@ -14,6 +14,8 @@ set('writable_dirs', ['bootstrap/cache', 'storage']);
 set('allow_anonymous_stats', false);
 set('releases_path', '/var/www/html/deployer/releases');
 set('current_path', '/var/www/html/deployer/current');
+// Set SSH multiplexing to speed up deployments
+set('ssh_multiplexing', true);
 
 // Server details
 host('melshafaey.com')
@@ -33,33 +35,13 @@ task('deploy:upload', function () {
 
     // Set permissions on release folder
     //run('chmod -R g+w {{releases_path}}/{{release_name}}');
-
 });
 
 task('deploy:update_code', function () {
-
     // Get latest release name
     $currentRelease = run('ls -t {{releases_path}} | head -n 1');
-
     // Create current symlink
     run("ln -sfn {{releases_path}}/$currentRelease {{current_path}}");
-
-    // Pull latest code from Git
-    cd('{{current_path}}');
-
-    // Install dependencies
-    run('composer install --no-interaction --prefer-dist --optimize-autoloader');
-    // Set maintenance mode
-    run('{{bin/php}} {{current_path}}/artisan down');
-
-    // Clear caches
-    run('{{bin/php}} {{current_path}}/artisan cache:clear');
-
-    // Reboot queue worker
-    run('{{bin/php}} {{current_path}}/artisan queue:restart');
-
-    // Disable maintenance mode
-    run('{{bin/php}} {{current_path}}/artisan up');
 });
 
 task('deploy:symlink', function () {
